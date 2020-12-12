@@ -1,9 +1,6 @@
 -module(supv).
 -compile(export_all).
 
-%% The supervisor process will be linked to the server
-%% and will trap the server's exit signals.
-
 start(NumNodes) ->
     register(?MODULE, Pid = spawn_link(?MODULE, init, [NumNodes])),
     Pid.
