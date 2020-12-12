@@ -39,23 +39,3 @@ passive({P1, P2}, S=#state{}) ->
 	gen_fsm:send_event(S#state.pointer, {P1, P2}),
 	{next_state, passive, {S#state{}}}.
 
-handle_info({V, M}, State, S=#state{}) ->
-	gen_fsm:send_event_after(2000, {V, M}),
-	{next_state, State, S#state{}}.
-
-
-
-try1() ->
-	gen_fsm:send_event(?MODULE,{1, 5}).
-
-try2() -> 
-	gen_fsm:send_event(?MODULE,{2, 5}).
-
-startit() ->
-	gen_fsm:send_event(?MODULE,{start}).
-
-add(Pid) ->
-	gen_fsm:send_event(?MODULE,{pointer, Pid}).
-
-show() ->
-	gen_fsm:send_event(?MODULE,{show}), ok.
