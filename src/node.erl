@@ -4,41 +4,33 @@
 
 -compile(export_all).
 
--record(state, {max, left, pointer, queue}).
+-record(state, {max, left, pointer}).
 
 start_link() ->
 	gen_fsm:start_link(?MODULE, [], []).
 
 init([]) ->
-	{ok, build, #state{max=self(), queue=[]}}.
+	{ok, build, #state{max=self()}}.
 
 build({pointer, Pointer}, S=#state{}) ->
-	{next_state, active, S#state{pointer=Pointer}}.
-
-%starting({start}, S=#state{}) ->
-%	gen_fsm:send_event(S#state.pointer, {1, S#state.max}),
-%	catchUp(S#state{}), %try to do active and passive processing? idk
-%	{next_state, catchUp, S#state{}};
-%starting({N, Max}, S=#state{}) ->
-%	S#state{queue= S#state.queue ++ [{N, Max}]},
-%	{next_state, starting, S#state{}}.
-
+	receive 
+		start ->
+			gen_fsm:send_event(Pointer, {1, S#state.max}),
+			{next_state, active, S#state{pointer=Pointer}}
+	end.
 
 active({1, Max}, S=#state{}) ->
-	%io:format("Processing msg: ~p", {1,Max}),
 	if S#state.max /= Max ->
-		S#state{left = Max},
 		gen_fsm:send_event(S#state.pointer, {2, Max}),
-		{next_state, active, S#state{}};
+		{next_state, active, S#state{left = Max}};
 	S#state.max == Max ->
-		io:format("Finished with maximum ~p", S#state.max),
-		{stop, finished, S#state{}}
+		io:format("Finished with maximum ~p~n", [S#state.max]),
+		{stop, normal, S#state{}}
 	end;
 active({2, Max}, S=#state{}) -> 
-	io:format("Processing msg: ~p", {2,Max}),
 	if S#state.left > Max andalso S#state.left > S#state.max ->
-		S#state{max = S#state.left},
-		{next_state, active, S#state{}};
+		gen_fsm:send_event(S#state.pointer, {1, S#state.left}),
+		{next_state, active, S#state{max = S#state.left}};
 	S#state.left =< Max orelse S#state.left =< S#state.max ->
 		{next_state, passive, S#state{}}
 	end.

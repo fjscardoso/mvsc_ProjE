@@ -26,7 +26,7 @@ handle_cast({N, Max}, S=#state{}) ->
 			gen_server:cast(S#state.pointer, {2, Max}),
 			{noreply, S#state{left = Max}};
 		S#state.max == Max ->
-			io:format("Finished with maximum ~p", [S#state.max]),
+			io:format("Finished with maximum ~p~n", [S#state.max]),
 			{stop, normal, S#state{}}
 		end;
 	S#state.state == active andalso N == 2 ->
