@@ -1,3 +1,5 @@
 *.beam
 .DS_Store
 /ebin
+*.iml
+.idea
