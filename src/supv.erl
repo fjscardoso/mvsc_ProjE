@@ -7,35 +7,49 @@ start(M,NumNodes) ->
 
 init({M,NumNodes}) ->
     process_flag(trap_exit, true),
-    startNodes(M, NumNodes, 1, [], []).
+    startNodes(M, NumNodes, []).
 
-startNodes(M,1, 0, Last, [H|T]) ->
+startNodes(M, 1, [H|T]) ->
 	{_,Pid} = apply(M, start_link, []),
 	io:format("Started~p~n", [Pid]),
-	gen_fsm:send_event(Last ,{pointer, Pid}),
-	gen_fsm:send_event(Pid ,{pointer, H}),
-	startProtocol([H|T] ++ [Pid]);
-startNodes(M, NumNodes, 0, Last, List) ->
+	List = [H|T] ++ [Pid],
+	buildNodes(List, H),
+	startProtocol(List),
+	receiving(List, M);
+startNodes(M, NumNodes, List) ->
 	{_,Pid} = apply(M, start_link, []),
 	io:format("Started~p~n", [Pid]),
-	gen_fsm:send_event(Last,{pointer, Pid}),
-	startNodes(M, NumNodes-1, 0, Pid, List++[Pid]);
-startNodes(M, NumNodes, 1, _, List) ->
-	{_,Pid} = apply(M, start_link, []),
-	io:format("Started~p~n", [Pid]),
-	startNodes(M, NumNodes-1, 0, Pid, List++[Pid]).
+	startNodes(M, NumNodes-1, List ++ [Pid]).
 
-startProtocol([]) -> receiving();
-startProtocol([H]) -> H ! start;
+buildNodes([H], First) -> 
+	gen_fsm:send_event(H ,{pointer, First});
+buildNodes([H1, H2|T], First) ->
+	gen_fsm:send_event(H1 ,{pointer, H2}),
+	buildNodes([H2|T], First).
+
+startProtocol([]) -> ok;
 startProtocol([H|T]) -> 
 	H ! start,
 	startProtocol(T).
 
-receiving() ->
+receiving(List, M) ->
     receive
         {'EXIT', _From, shutdown} ->
             exit(shutdown); % will kill the child too
-        {'EXIT', Pid, Reason} ->
-            io:format("Process ~p exited for reason ~p~n", [Pid, Reason]),
-            exit(shutdown)
+        {'EXIT', From, Reason} ->
+            io:format("Process ~p exited for reason ~p~n", [From, Reason]),
+            RList = lists:delete(From, List),
+            sendStopAll(RList),
+            {_,Pid} = apply(M, start_link, []),
+            io:format("Started~p~n", [Pid]),
+            [H|T] = RList ++ [Pid],
+            buildNodes([H|T], H),
+            receiving([H|T], M)
     end.
+
+sendStopAll([]) -> ok;
+sendStopAll([H]) -> gen_fsm:send_all_state_event(H, restart);
+sendStopAll([H|T]) -> 
+	gen_fsm:send_all_state_event(H, restart),
+	sendStopAll(T).
+
