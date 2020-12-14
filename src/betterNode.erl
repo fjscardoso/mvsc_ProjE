@@ -24,21 +24,21 @@ build({pointer, Pointer}, S = #state{}) ->
 %% send initial msg <1, max, phase, 2^phase> to the neighbor
 %% TODO: think of a better name for this function
 b1_initiate_msg(S = #state{pointer = Pointer, max = Max, phase = Phase}) ->
-    gen_fsm:send_event(Pointer, {m1, Max, Phase, math:pow(2, Phase)}),
+    gen_fsm:send_event(Pointer, {one, Max, Phase, math:pow(2, Phase)}),
     {next_state, active, S#state{}}.
 
 
-active({m1, PredMax, _Phase, _Counter}, S = #state{}) ->
+active({one, PredMax, _Phase, _Counter}, S = #state{}) ->
     test_maximum(PredMax, S#state.id),
     case PredMax > S#state.max of
         true ->
             {next_state, waiting, S#state{max = PredMax}};
         false ->
-            gen_fsm:send_event(S#state.pointer, {m2, S#state.max}), %comentar esta linha para testar
+            gen_fsm:send_event(S#state.pointer, {two, S#state.max}), %comentar esta linha para testar
             {next_state, passive, S#state{}}  %trocar de passive para potato para testar, inicial {next_state, passive, S#state{}}
     end;
-active({m2, _}, S = #state{}) ->
-    %% an active process should never receive a type m2 message
+active({two, _}, S = #state{}) ->
+    %% an active process should never receive a type two message
     {stop, error, S#state{}}.
 
 
@@ -46,40 +46,40 @@ active({m2, _}, S = #state{}) ->
 %%potato({potato}, S = #state{}) ->
 %%    {next_state, active, S#state{}}.
 
-passive({m1, Max, Phase, Counter}, S = #state{}) ->
+passive({one, Max, Phase, Counter}, S = #state{}) ->
     test_maximum(Max, S#state.id),
     if Max >= S#state.max andalso Counter >= 1 ->
         if Counter > 1 ->
-            gen_fsm:send_event(S#state.pointer, {m1, Max, Phase, Counter - 1}),
+            gen_fsm:send_event(S#state.pointer, {one, Max, Phase, Counter - 1}),
             {next_state, passive, S#state{max = Max}}; %not sure about this state or terminates
         Counter == 1 ->
-            gen_fsm:send_event(S#state.pointer, {m1, Max, Phase, 0}),
+            gen_fsm:send_event(S#state.pointer, {one, Max, Phase, 0}),
             {next_state, waiting, S#state{max = Max, phase = Phase}}
         end;
     Max < S#state.max orelse Counter < 1 ->
-        gen_fsm:send_event(S#state.pointer, {m1, Max, Phase, 0}),
+        gen_fsm:send_event(S#state.pointer, {one, Max, Phase, 0}),
         {next_state, passive, S#state{}} %not sure about this state or terminates
     end;
-passive({m2, Max}, S = #state{}) ->
+passive({two, Max}, S = #state{}) ->
     test_maximum(Max, S#state.id),
     if Max < S#state.max ->
         %% just skip this msg
         {next_state, passive, S#state{}};
     Max >= S#state.max ->
-        gen_fsm:send_event(S#state.pointer, {m2, Max}),
+        gen_fsm:send_event(S#state.pointer, {two, Max}),
         {next_state, passive, S#state{}}
     end.
 
 
-waiting(M = {m1, Max, _Phase, _Counter}, S = #state{}) ->
+waiting(M1 = {one, Max, _Phase, _Counter}, S = #state{}) ->
     test_maximum(Max, S#state.id),
     %% artificially transition to passive state
-    passive(M, S#state{});
-waiting({m2, Max}, S = #state{max = Max}) ->
-    %% if a message of type M2 arrives then Max should be equal to S#state.max
+    passive(M1, S#state{});
+waiting({two, Max}, S = #state{max = Max}) ->
+    %% if a message of type two arrives then Max should be equal to S#state.max
     test_maximum(Max, S#state.id),
     b1_initiate_msg(S#state{phase = S#state.phase + 1});
-waiting({m2, _Max}, S = #state{}) ->
+waiting({two, _Max}, S = #state{}) ->
     % if Max =/= S#state.max then some error has occurred
     {stop, error, S#state{}}.
 
