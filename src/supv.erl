@@ -1,55 +1,61 @@
 -module(supv).
 -compile(export_all).
 
-start(M, NumNodes) ->
-    register(?MODULE, Pid = spawn_link(?MODULE, init, [{M, NumNodes}])),
+start(Mod, NumNodes) ->
+    register(?MODULE, Pid = spawn_link(?MODULE, init, [{Mod, NumNodes}])),
     Pid.
 
-init({M, NumNodes}) ->
+init({Mod, NumNodes}) ->
     process_flag(trap_exit, true),
-    startNodes(M, NumNodes, []).
+    start_nodes(Mod, NumNodes, NumNodes, []).
 
-startNodes(M, 1, [H | T]) ->
-    {_, Pid} = apply(M, start_link, []),
-    io:format("Started~p~n", [Pid]),
-    List = [H | T] ++ [Pid],
-    buildNodes(List, H),
-    startProtocol(List),
-    receiving(List, M);
-startNodes(M, NumNodes, List) ->
-    {_, Pid} = apply(M, start_link, []),
-    io:format("Started~p~n", [Pid]),
-    startNodes(M, NumNodes - 1, List ++ [Pid]).
 
-buildNodes([H], First) ->
+%% Assign a random id to a process so as to avoid trivial algorithm case
+%% in which the process ids follow the order of the ring.
+start_node(Mod, NumNodes) ->
+    Id = rand:uniform(1000 * NumNodes),
+    {_, Pid} = apply(Mod, start_link, [Id]), %% TODO: nao se poderia substituir logo isto por chamada a gen_fsm:start_link ?
+    io:format("Started ~p with id ~p~n", [Pid, Id]),
+    Pid.
+
+
+start_nodes(Mod, TotalNumNodes, 0, List = [First | _]) ->
+    build_ring(List, First),
+    start_algo_execution(Mod, TotalNumNodes, List);
+start_nodes(Mod, TotalNumNodes, NumNodes, List) ->
+    Pid = start_node(Mod, TotalNumNodes),
+    start_nodes(Mod, TotalNumNodes, NumNodes - 1, List ++ [Pid]).
+
+%% Send each node its neighbor on the ring;
+%% the last node in the list connects to the first, closing the ring.
+build_ring([H], First) ->
     gen_fsm:send_event(H, {pointer, First});
-buildNodes([H1, H2 | T], First) ->
+build_ring([H1, H2 | T], First) ->
     gen_fsm:send_event(H1, {pointer, H2}),
-    buildNodes([H2 | T], First).
+    build_ring([H2 | T], First).
 
-startProtocol([]) -> ok;
-startProtocol([H | T]) ->
-    H ! start,
-    startProtocol(T).
+%% Signal every node that they can start executing the algorithm,
+%% and go on to monitoring them.
+start_algo_execution(Mod, TotalNumNodes, Nodes) ->
+    SignalStart = fun(Node) -> Node ! start end,
+    lists:foreach(SignalStart, Nodes),
+    receiving(Mod, TotalNumNodes, Nodes).
 
-receiving(List, M) ->
+%% If a node dies, the algorithm is restarted.
+receiving(Mod, TotalNumNodes, List) ->
     receive
         {'EXIT', _From, shutdown} ->
             exit(shutdown); % will kill the child too
         {'EXIT', From, Reason} ->
             io:format("Process ~p exited for reason ~p~n", [From, Reason]),
-            RList = lists:delete(From, List),
-            sendStopAll(RList),
-            {_, Pid} = apply(M, start_link, []),
-            io:format("Started~p~n", [Pid]),
-            [H | T] = RList ++ [Pid],
-            buildNodes([H | T], H),
-            receiving([H | T], M)
+            NewList = lists:delete(From, List),
+            sendStopAll(NewList),
+            start_nodes(Mod, TotalNumNodes, 1, NewList)
     end.
 
-sendStopAll([]) -> ok;
-sendStopAll([H]) -> gen_fsm:send_all_state_event(H, restart);
-sendStopAll([H | T]) ->
-    gen_fsm:send_all_state_event(H, restart),
-    sendStopAll(T).
+%% Send to every alive node an event that makes the node
+%% reset its local variables and wait for a new start signal.
+sendStopAll(List) ->
+    SendRestart = fun(Node) -> gen_fsm:send_all_state_event(Node, restart) end,
+    lists:foreach(SendRestart, List).
 
