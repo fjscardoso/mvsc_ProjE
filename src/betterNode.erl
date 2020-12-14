@@ -86,13 +86,25 @@ waiting({two, _Max}, S = #state{}) ->
 handle_event(restart, _StateName, S = #state{id = Id}) ->
     io:format("Restarting waiting for builds ~p~n", [self()]),
     %% restart the algorithm
-    {next_state, build, S#state{phase = 0, max = Id}}.
+    {next_state, build, S#state{phase = 0, max = Id}};
+handle_event(gotMax , _StateName, S = #state{}) ->
+    %io:format("Got maximum value ~p~n", [self()]),
+    %% restart the algorithm
+    {stop, normal, S#state{}}.
+
+terminate(normal, _StateName, _StateData) ->
+    io:format("Got max terminating~n"),
+    ok;
+terminate(_Reason, _StateName, _StateData) ->
+    io:format("Something bad got to restart"),
+    ok.
 
 test_maximum(Max, Max) ->
     %% if a node received his Id as his predecessor's Max,
     %% then his Id is the global maximum - can terminate the algorithm
     io:format("Maximum is: ~p~n", [Max]),
     %% TODO(?): terminate processes in an orderly fashion - maybe it can just be the order of the list in the supervisor
-    exit(shutdown);
+    exit(normal);
 test_maximum(_, _) ->
     false.
+

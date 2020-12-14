@@ -44,8 +44,9 @@ start_algo_execution(Mod, TotalNumNodes, Nodes) ->
 %% If a node dies, the algorithm is restarted.
 receiving(Mod, TotalNumNodes, List) ->
     receive
-        {'EXIT', _From, shutdown} ->
-            exit(shutdown); % will kill the child too
+        {'EXIT', From, normal} ->
+            terminateChildren(lists:delete(From, List)), 
+            exit(normal);
         {'EXIT', From, Reason} ->
             io:format("Process ~p exited for reason ~p~n", [From, Reason]),
             NewList = lists:delete(From, List),
@@ -58,4 +59,11 @@ receiving(Mod, TotalNumNodes, List) ->
 sendStopAll(List) ->
     SendRestart = fun(Node) -> gen_fsm:send_all_state_event(Node, restart) end,
     lists:foreach(SendRestart, List).
+
+terminateChildren([]) -> ok;
+terminateChildren([H]) -> 
+    gen_fsm:send_all_state_event(H, gotMax);
+terminateChildren([H|T]) ->
+    gen_fsm:send_all_state_event(H, gotMax),
+    terminateChildren(T).
 
