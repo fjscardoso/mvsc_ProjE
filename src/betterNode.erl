@@ -71,12 +71,14 @@ passive({m2, Max}, S = #state{}) ->
     end.
 
 
-waiting({m1, Max, _Phase, _Counter}, S = #state{}) ->
+waiting(M = {m1, Max, _Phase, _Counter}, S = #state{}) ->
     test_maximum(Max, S#state.id),
-    {next_state, passive, S#state{}};
+    %% artificially transition to passive state
+    passive(M, S#state{});
 waiting({m2, Max}, S = #state{max = Max}) ->
     %% if a message of type M2 arrives then Max should be equal to S#state.max
     test_maximum(Max, S#state.id),
+    io:format("~p Received m2 message <m2, ~p>~n", [self(), Max]),
     b1_initiate_msg(S#state{phase = S#state.phase + 1});
 waiting({m2, _Max}, S = #state{}) ->
     % if Max =/= S#state.max then some error has occurred
