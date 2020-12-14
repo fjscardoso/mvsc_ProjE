@@ -23,16 +23,16 @@ build({pointer, Pointer}, S = #state{}) ->
 
 %% send initial msg <1, max, phase, 2^phase> to the neighbor
 %% TODO: think of a better name for this function
-b1_initiate_msg(S = #state{}) ->
-    gen_fsm:send_event(S#state.pointer, {m1, S#state.max, S#state.phase, math:pow(2, S#state.phase)}),
-    {next_state, active, S}.
+b1_initiate_msg(S = #state{pointer = Pointer, max = Max, phase = Phase}) ->
+    gen_fsm:send_event(Pointer, {m1, Max, Phase, math:pow(2, Phase)}),
+    {next_state, active, S#state{}}.
 
 
-active({m1, Max, _Phase, _Counter}, S = #state{}) ->
-    test_maximum(Max, S#state.id),
-    case Max > S#state.max of
+active({m1, PredMax, _Phase, _Counter}, S = #state{}) ->
+    test_maximum(PredMax, S#state.id),
+    case PredMax > S#state.max of
         true ->
-            {next_state, waiting, S#state{max = Max}};
+            {next_state, waiting, S#state{max = PredMax}};
         false ->
             gen_fsm:send_event(S#state.pointer, {m2, S#state.max}), %comentar esta linha para testar
             {next_state, passive, S#state{}}  %trocar de passive para potato para testar, inicial {next_state, passive, S#state{}}
@@ -78,7 +78,6 @@ waiting(M = {m1, Max, _Phase, _Counter}, S = #state{}) ->
 waiting({m2, Max}, S = #state{max = Max}) ->
     %% if a message of type M2 arrives then Max should be equal to S#state.max
     test_maximum(Max, S#state.id),
-    io:format("~p Received m2 message <m2, ~p>~n", [self(), Max]),
     b1_initiate_msg(S#state{phase = S#state.phase + 1});
 waiting({m2, _Max}, S = #state{}) ->
     % if Max =/= S#state.max then some error has occurred
