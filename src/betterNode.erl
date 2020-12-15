@@ -34,40 +34,36 @@ active({one, PredMax, _Phase, _Counter}, S = #state{}) ->
         true ->
             {next_state, waiting, S#state{max = PredMax}};
         false ->
-            gen_fsm:send_event(S#state.pointer, {two, S#state.max}), %comentar esta linha para testar
-            {next_state, passive, S#state{}}  %trocar de passive para potato para testar, inicial {next_state, passive, S#state{}}
+            gen_fsm:send_event(S#state.pointer, {two, S#state.max}),
+            {next_state, passive, S#state{}}
     end;
 active({two, _}, S = #state{}) ->
     %% an active process should never receive a type two message
     {stop, error, S#state{}}.
 
 
-
-%%potato({potato}, S = #state{}) ->
-%%    {next_state, active, S#state{}}.
-
 passive({one, Max, Phase, Counter}, S = #state{}) ->
     test_maximum(Max, S#state.id),
     if Max >= S#state.max andalso Counter >= 1 ->
         if Counter > 1 ->
             gen_fsm:send_event(S#state.pointer, {one, Max, Phase, Counter - 1}),
-            {next_state, passive, S#state{max = Max}}; %not sure about this state or terminates
+            {next_state, passive, S#state{max = Max}};
         Counter == 1 ->
             gen_fsm:send_event(S#state.pointer, {one, Max, Phase, 0}),
             {next_state, waiting, S#state{max = Max, phase = Phase}}
         end;
     Max < S#state.max orelse Counter < 1 ->
         gen_fsm:send_event(S#state.pointer, {one, Max, Phase, 0}),
-        {next_state, passive, S#state{}} %not sure about this state or terminates
+        {next_state, passive, S#state{}}
     end;
 passive({two, Max}, S = #state{}) ->
     test_maximum(Max, S#state.id),
-    if Max < S#state.max ->
-        %% just skip this msg
-        {next_state, passive, S#state{}};
-    Max >= S#state.max ->
-        gen_fsm:send_event(S#state.pointer, {two, Max}),
-        {next_state, passive, S#state{}}
+    case Max < S#state.max of
+        true -> %% just skip this msg
+            {next_state, passive, S#state{}};
+        false ->
+            gen_fsm:send_event(S#state.pointer, {two, Max}),
+            {next_state, passive, S#state{}}
     end.
 
 
@@ -85,25 +81,24 @@ waiting({two, _Max}, S = #state{}) ->
 
 handle_event(restart, _StateName, S = #state{id = Id}) ->
     io:format("Restarting waiting for builds ~p~n", [self()]),
-    %% restart the algorithm
+    %% reset local variables
     {next_state, build, S#state{phase = 0, max = Id}};
 handle_event(gotMax , _StateName, S = #state{}) ->
-    %io:format("Got maximum value ~p~n", [self()]),
-    %% restart the algorithm
+    %% signal from the supervisor that the leader was found
+    %% and it's not this process - just terminate
     {stop, normal, S#state{}}.
 
 terminate(normal, _StateName, _StateData) ->
-    io:format("Got max terminating~n"),
+    io:format("Leader was found - terminating...~n"),
     ok;
 terminate(_Reason, _StateName, _StateData) ->
-    io:format("Something bad got to restart"),
+    io:format("Something bad, got to restart"),
     ok.
 
 test_maximum(Max, Max) ->
     %% if a node received his Id as his predecessor's Max,
     %% then his Id is the global maximum - can terminate the algorithm
     io:format("Maximum is: ~p~n", [Max]),
-    %% TODO(?): terminate processes in an orderly fashion - maybe it can just be the order of the list in the supervisor
     exit(normal);
 test_maximum(_, _) ->
     false.

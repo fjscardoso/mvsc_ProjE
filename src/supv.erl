@@ -14,7 +14,7 @@ init({Mod, NumNodes}) ->
 %% in which the process ids follow the order of the ring.
 start_node(Mod, NumNodes) ->
     Id = rand:uniform(1000 * NumNodes),
-    {_, Pid} = apply(Mod, start_link, [Id]), %% TODO: nao se poderia substituir logo isto por chamada a gen_fsm:start_link ?
+    {_, Pid} = apply(Mod, start_link, [Id]),
     io:format("Started ~p with id ~p~n", [Pid, Id]),
     Pid.
 
@@ -41,29 +41,31 @@ start_algo_execution(Mod, TotalNumNodes, Nodes) ->
     lists:foreach(SignalStart, Nodes),
     receiving(Mod, TotalNumNodes, Nodes).
 
-%% If a node dies, the algorithm is restarted.
+%% Monitor child processes
 receiving(Mod, TotalNumNodes, List) ->
     receive
         {'EXIT', From, normal} ->
-            terminateChildren(lists:delete(From, List)), 
+            %% The leader (From) was found
+            terminate_children(lists:delete(From, List)),
             exit(normal);
         {'EXIT', From, Reason} ->
+            %% If a node dies, the algorithm is restarted.
             io:format("Process ~p exited for reason ~p~n", [From, Reason]),
             NewList = lists:delete(From, List),
-            sendStopAll(NewList),
+            send_restart_all(NewList),
             start_nodes(Mod, TotalNumNodes, 1, NewList)
     end.
 
 %% Send to every alive node an event that makes the node
 %% reset its local variables and wait for a new start signal.
-sendStopAll(List) ->
+send_restart_all(Nodes) ->
     SendRestart = fun(Node) -> gen_fsm:send_all_state_event(Node, restart) end,
-    lists:foreach(SendRestart, List).
+    lists:foreach(SendRestart, Nodes).
 
-terminateChildren([]) -> ok;
-terminateChildren([H]) -> 
-    gen_fsm:send_all_state_event(H, gotMax);
-terminateChildren([H|T]) ->
-    gen_fsm:send_all_state_event(H, gotMax),
-    terminateChildren(T).
+%% The leader has been found - terminate all processes in
+%% an orderly fashion.
+terminate_children(Nodes) ->
+    SendTerminate = fun(Node) -> gen_fsm:send_all_state_event(Node, gotMax) end,
+    lists:foreach(SendTerminate, Nodes).
+
 
