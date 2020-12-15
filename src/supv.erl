@@ -65,7 +65,7 @@ send_restart_all(Nodes) ->
 %% The leader has been found - terminate all processes in
 %% an orderly fashion.
 terminate_children(Nodes) ->
-    SendTerminate = fun(Node) -> gen_fsm:send_all_state_event(Node, gotMax) end,
+    SendTerminate = fun(Node) -> gen_fsm:send_all_state_event(Node, got_max) end,
     lists:foreach(SendTerminate, Nodes).
 
 

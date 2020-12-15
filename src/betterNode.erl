@@ -83,7 +83,7 @@ handle_event(restart, _StateName, S = #state{id = Id}) ->
     io:format("Restarting waiting for builds ~p~n", [self()]),
     %% reset local variables
     {next_state, build, S#state{phase = 0, max = Id}};
-handle_event(gotMax , _StateName, S = #state{}) ->
+handle_event(got_max, _StateName, S = #state{}) ->
     %% signal from the supervisor that the leader was found
     %% and it's not this process - just terminate
     {stop, normal, S#state{}}.
