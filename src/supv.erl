@@ -1,30 +1,30 @@
 -module(supv).
 -compile(export_all).
 
-start(Mod, NumNodes) ->
-    register(?MODULE, Pid = spawn_link(?MODULE, init, [{Mod, NumNodes}])),
+start(NumNodes) ->
+    register(?MODULE, Pid = spawn_link(?MODULE, init, [NumNodes])),
     Pid.
 
-init({Mod, NumNodes}) ->
+init(NumNodes) ->
     process_flag(trap_exit, true),
-    start_nodes(Mod, NumNodes, NumNodes, []).
+    start_nodes(NumNodes, NumNodes, []).
 
 
 %% Assign a random id to a process so as to avoid trivial algorithm case
 %% in which the process ids follow the order of the ring.
-start_node(Mod, NumNodes) ->
+start_node(NumNodes) ->
     Id = rand:uniform(1000 * NumNodes),
-    {_, Pid} = apply(Mod, start_link, [Id]),
+    {_, Pid} = apply(node, start_link, [Id]),
     io:format("Started ~p with id ~p~n", [Pid, Id]),
     Pid.
 
 
-start_nodes(Mod, TotalNumNodes, 0, List = [First | _]) ->
+start_nodes(TotalNumNodes, 0, List = [First | _]) ->
     build_ring(List, First),
-    start_algo_execution(Mod, TotalNumNodes, List);
-start_nodes(Mod, TotalNumNodes, NumNodes, List) ->
-    Pid = start_node(Mod, TotalNumNodes),
-    start_nodes(Mod, TotalNumNodes, NumNodes - 1, List ++ [Pid]).
+    start_algo_execution(TotalNumNodes, List);
+start_nodes(TotalNumNodes, NumNodes, List) ->
+    Pid = start_node(TotalNumNodes),
+    start_nodes(TotalNumNodes, NumNodes - 1, List ++ [Pid]).
 
 %% Send each node its neighbor on the ring;
 %% the last node in the list connects to the first, closing the ring.
@@ -36,13 +36,13 @@ build_ring([H1, H2 | T], First) ->
 
 %% Signal every node that they can start executing the algorithm,
 %% and go on to monitoring them.
-start_algo_execution(Mod, TotalNumNodes, Nodes) ->
+start_algo_execution(TotalNumNodes, Nodes) ->
     SignalStart = fun(Node) -> Node ! start end,
     lists:foreach(SignalStart, Nodes),
-    receiving(Mod, TotalNumNodes, Nodes).
+    receiving(TotalNumNodes, Nodes).
 
 %% Monitor child processes
-receiving(Mod, TotalNumNodes, List) ->
+receiving(TotalNumNodes, List) ->
     receive
         {'EXIT', From, normal} ->
             %% The leader (From) was found
@@ -53,7 +53,7 @@ receiving(Mod, TotalNumNodes, List) ->
             io:format("Process ~p exited for reason ~p~n", [From, Reason]),
             NewList = lists:delete(From, List),
             send_restart_all(NewList),
-            start_nodes(Mod, TotalNumNodes, 1, NewList)
+            start_nodes(TotalNumNodes, 1, NewList)
     end.
 
 %% Send to every alive node an event that makes the node
