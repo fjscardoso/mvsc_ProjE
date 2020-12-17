@@ -22,7 +22,6 @@ build({pointer, Pointer}, S = #state{}) ->
 
 
 %% send initial msg <1, max, phase, 2^phase> to the neighbor
-%% TODO: think of a better name for this function
 b1_initiate_msg(S = #state{pointer = Pointer, max = Max, phase = Phase}) ->
     gen_fsm:send_event(Pointer, {one, Max, Phase, math:pow(2, Phase)}),
     {next_state, active, S#state{}}.
